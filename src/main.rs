@@ -16,7 +16,7 @@ const AMAX: usize = 2047; // maximum address
 const LEVMAX: usize = 3;  // maximum depth of block nesting
 const CXMAX: usize = 200; // size of code array
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 enum Symbol {
     Nul,
     Ident,
@@ -209,6 +209,8 @@ fn main() {
 
     let mut parser = initialize_parser(input_str);
     let symset = initialize_symset();
+
+    parser.get_symbol();
     parser.block(symset);
 
     if parser.current_symbol != Symbol::Period {
@@ -268,11 +270,12 @@ impl Parser {
 
     fn get_char(&mut self) {
         self.current_char = self.input.remove(0);
-        print!("{}", self.current_char);
 
         if self.current_char == '\n' {
+            println!("");
             self.char_count = 0;
         } else {
+            print!("{}", self.current_char);
             self.char_count += 1;
         }
     }
@@ -292,7 +295,7 @@ impl Parser {
             c >= '0' && c <= '9'
         }
 
-        while self.current_char == ' ' {
+        while self.current_char.is_whitespace() {
             self.get_char();
         }
 
@@ -305,7 +308,7 @@ impl Parser {
                 }
                 self.get_char();
 
-                if is_identifier(self.current_char) {
+                if !is_identifier(self.current_char) {
                     break;
                 }
             }
@@ -386,6 +389,7 @@ impl Parser {
                                 ';' => Symbol::Semicolon,
                                 _ => Symbol::Nul,
                             };
+                            self.get_char();
                         }
                     }
                 }
@@ -957,9 +961,7 @@ fn interpret() {
 
 }
 
-#[test]
-fn constants() {
-    let mut parser = initialize_parser(String::from("const\nm = 7, n = 85;"));
-    let symset = initialize_symset();
-    parser.block(symset);
-}
+//TODO
+//  -add line numbers / format output exactly
+//  -add Ret 0 0 to the end of funcions
+//  -write interpreter
