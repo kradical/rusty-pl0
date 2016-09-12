@@ -2,9 +2,7 @@
 // translated from pascal Program 5.6 in Algorithms + Data Structures = Programs
 
 use std::collections::{HashSet};
-use std::fs::File;
-use std::path::Path;
-use std::io::Read;
+use std::io::{self, Read};
 use std::error::Error;
 use std::fmt;
 
@@ -199,16 +197,8 @@ fn initialize_symset() -> SymSet {
 }
 
 fn main() {
-    //TODO read from stdin instead
-    let path = Path::new("test.pl0");
-    let mut input_file = match File::open(&path) {
-        Err(y) => panic!("error opening input file: {}", y.description()),
-        Ok(f) => f,
-    };
-
     let mut input_str = String::new();
-
-    match input_file.read_to_string(&mut input_str) {
+    match io::stdin().read_to_string(&mut input_str) {
         Err(y) => panic!("error reading iput file: {}", y.description()),
         Ok(_) => {},
     }
@@ -1103,5 +1093,6 @@ fn find_base(mut l: usize, b: usize, s: &[i64; STACKSIZE]) -> usize {
     b1
 }
 
-//TODO
-//  -fix up all the .clone()'s
+// TODO
+//  -fix up all the cloning
+//  -used fixed sized arrays for the fixed stuff
