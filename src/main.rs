@@ -15,6 +15,36 @@ const LEVMAX: usize = 3;  // maximum depth of block nesting
 const CXMAX: usize = 200; // size of code array
 const STACKSIZE: usize = 500; // interpreter stack size
 
+enum ParseError {
+    Compare,
+    CompareAfter,
+    CompareBefore,
+    IdentifierAfter,
+    CommaMiss,
+    ProcedureAfter,
+    ExpectedStatement,
+    StatementSymbol,
+    EndProgram,
+    StatementSeperator,
+    UndeclaredIdentifier,
+    NoConstAssign,
+    Assign,
+    CallAfter,
+    CallConst,
+    ExpectedThen,
+    ExpectedEnd,
+    ExpectedDo,
+    StatementAfter,
+    ExpectedRelation,
+    ProcedureReserved,
+    RightParenMiss,
+    FactorAfter,
+    ExpressionBegin,
+    NumOverflow,
+    ConstOverflow,
+    LexicalOverflow,
+}
+
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 enum Symbol {
     Nul,
@@ -210,7 +240,7 @@ fn main() {
     parser.block(symset);
 
     if parser.current_symbol != Symbol::Period {
-        parser.error(9);
+        parser.error(ParseError::EndProgram);
     }
     if parser.error_count == 0 {
         interpret(&parser.code_words);
@@ -222,7 +252,7 @@ fn main() {
 
 impl Parser {
     /// Error Handler
-    fn error(&mut self, n: usize) {
+    fn error(&mut self, n: ParseError) {
         let mut err_msg = String::from("*****");
 
         for _ in 0..self.char_count {
@@ -231,36 +261,36 @@ impl Parser {
 
         err_msg.push_str("^ ");
 
-        match n {
-            1 => err_msg.push_str("use = instead of :="),
-            2 => err_msg.push_str("= must be followed by a number"),
-            3 => err_msg.push_str("identifier must be followed by ="),
-            4 => err_msg.push_str("const, var, procedure must be followed by an identifier"),
-            5 => err_msg.push_str("semicolon or comma missing"),
-            6 => err_msg.push_str("incorrect symbol after procedure declaration"),
-            7 => err_msg.push_str("statement expected"),
-            8 => err_msg.push_str("incorrect symbol after statement part in block"),
-            9 => err_msg.push_str("period expected"),
-           10 => err_msg.push_str("semicolon between statements is missing"),
-           11 => err_msg.push_str("undeclared identifier"),
-           12 => err_msg.push_str("assignment to constant or procedure is not allowed"),
-           13 => err_msg.push_str("assignment operator := expected"),
-           14 => err_msg.push_str("call must be followed by an identifier"),
-           15 => err_msg.push_str("call of a constant or a variable is meaningless"),
-           16 => err_msg.push_str("then expected"),
-           17 => err_msg.push_str("semicolon or end expected"),
-           18 => err_msg.push_str("do expected"),
-           19 => err_msg.push_str("incorrect symbol following statement"),
-           20 => err_msg.push_str("relational operator expected"),
-           21 => err_msg.push_str("expression must not contain a procedure identifier"),
-           22 => err_msg.push_str("right paranthesis missing"),
-           23 => err_msg.push_str("the preceding factor cannot be followed by this symbol"),
-           24 => err_msg.push_str("an expression cannot begin with this symbol"),
-           30 => err_msg.push_str("this number is too large"),
-           31 => err_msg.push_str("this constant is too large"),
-           32 => err_msg.push_str("too many lexical levels"),
-           _ => {},
-        }
+        let err_str = match n {
+            ParseError::Compare => "use = instead of :=",
+            ParseError::CompareAfter => "= must be followed by a number",
+            ParseError::CompareBefore => "identifier must be followed by =",
+            ParseError::IdentifierAfter => "const, var, procedure must be followed by an identifier",
+            ParseError::CommaMiss => "semicolon or comma missing",
+            ParseError::ProcedureAfter => "incorrect symbol after procedure declaration",
+            ParseError::ExpectedStatement => "statement expected",
+            ParseError::StatementSymbol => "incorrect symbol after statement part in block",
+            ParseError::EndProgram => "period expected",
+            ParseError::StatementSeperator => "semicolon between statements is missing",
+            ParseError::UndeclaredIdentifier => "undeclared identifier",
+            ParseError::NoConstAssign => "assignment to constant or procedure is not allowed",
+            ParseError::Assign => "assignment operator := expected",
+            ParseError::CallAfter => "call must be followed by an identifier",
+            ParseError::CallConst => "call of a constant or a variable is meaningless",
+            ParseError::ExpectedThen => "then expected",
+            ParseError::ExpectedEnd => "semicolon or end expected",
+            ParseError::ExpectedDo => "do expected",
+            ParseError::StatementAfter => "incorrect symbol following statement",
+            ParseError::ExpectedRelation => "relational operator expected",
+            ParseError::ProcedureReserved => "expression must not contain a procedure identifier",
+            ParseError::RightParenMiss => "right paranthesis missing",
+            ParseError::FactorAfter => "the preceding factor cannot be followed by this symbol",
+            ParseError::ExpressionBegin => "an expression cannot begin with this symbol",
+            ParseError::NumOverflow => "this number is too large",
+            ParseError::ConstOverflow => "this constant is too large",
+            ParseError::LexicalOverflow => "too many lexical levels",
+        };
+        err_msg.push_str(err_str);
 
         self.err_msgs.push(err_msg);
         self.error_count += 1;
@@ -348,7 +378,7 @@ impl Parser {
                 };
 
                 if number > 99999999999999 {
-                    self.error(30);
+                    self.error(ParseError::NumOverflow);
                 }
 
                 self.last_num = number;
@@ -418,9 +448,9 @@ impl Parser {
     }
 
     /// Parser
-    fn test(&mut self, s1: &SymSet, s2: &SymSet, n: usize) {
+    fn test(&mut self, s1: &SymSet, s2: &SymSet, e: ParseError) {
         if !s1.contains(&self.current_symbol) {
-            self.error(n);
+            self.error(e);
             while !(s1.contains(&self.current_symbol) || s2.contains(&self.current_symbol)) {
                 self.get_symbol();
             }
@@ -444,7 +474,7 @@ impl Parser {
         self.ident_table[self.table_index] = match k {
             Obj::Constant => {
                 if self.last_num > AMAX {
-                    self.error(31);
+                    self.error(ParseError::ConstOverflow);
                     self.last_num = 0;
                 }
 
@@ -498,7 +528,7 @@ impl Parser {
 
             if self.current_symbol == Symbol::Eql || self.current_symbol == Symbol::Becomes {
                 if self.current_symbol == Symbol::Becomes{
-                    self.error(1);
+                    self.error(ParseError::Compare);
                 }
 
                 self.get_symbol();
@@ -507,13 +537,13 @@ impl Parser {
                     self.enter(Obj::Constant);
                     self.get_symbol();
                 } else {
-                    self.error(2);
+                    self.error(ParseError::CompareAfter);
                 }
             } else {
-                self.error(3);
+                self.error(ParseError::CompareBefore);
             }
         } else {
-            self.error(4);
+            self.error(ParseError::IdentifierAfter);
         }
     }
 
@@ -523,19 +553,19 @@ impl Parser {
             self.enter(Obj::Variable);
             self.get_symbol();
         } else {
-            self.error(4);
+            self.error(ParseError::IdentifierAfter);
         }
     }
 
     fn factor(&mut self, fsys: SymSet) {
         let symbol_set = self.facbegsys.clone();
-        self.test(&symbol_set, &fsys, 24);
+        self.test(&symbol_set, &fsys, ParseError::ExpressionBegin);
 
         while self.facbegsys.contains(&self.current_symbol) {
             if self.current_symbol == Symbol::Ident {
                 let i = self.position(&self.last_id);
                 if i == TXMAX {
-                    self.error(11);
+                    self.error(ParseError::UndeclaredIdentifier);
                 } else {
                     // entry should exist, safe to unwrap
                     let entry = self.ident_table[i].clone().unwrap();
@@ -544,14 +574,14 @@ impl Parser {
                     match entry.kind {
                         Obj::Constant => { self.generate_instruction(Fct::Lit, 0, entry.val); },
                         Obj::Variable => { self.generate_instruction(Fct::Lod, level - entry.level, entry.adr); },
-                        Obj::Procedure => { self.error(21); },
+                        Obj::Procedure => { self.error(ParseError::ProcedureReserved); },
                     }
                 }
                 self.get_symbol();
             } else {
                 if self.current_symbol == Symbol::Number {
                     if self.last_num > AMAX {
-                        self.error(31);
+                        self.error(ParseError::ConstOverflow);
                         self.last_num = 0;
                     }
                     let last_num = self.last_num;
@@ -568,7 +598,7 @@ impl Parser {
                         if self.current_symbol == Symbol::RParen {
                             self.get_symbol();
                         } else {
-                            self.error(22);
+                            self.error(ParseError::RightParenMiss);
                         }
                     }
                 }
@@ -576,7 +606,7 @@ impl Parser {
 
             let mut lparen_set = SymSet::new();
             lparen_set.insert(Symbol::LParen);
-            self.test(&fsys, &lparen_set, 23);
+            self.test(&fsys, &lparen_set, ParseError::FactorAfter);
         }
     }
 
@@ -669,7 +699,7 @@ impl Parser {
             self.expression(new_set1);
 
             if !is_conditional(self.current_symbol) {
-                self.error(20);
+                self.error(ParseError::ExpectedRelation);
             } else {
                 let relop = self.current_symbol;
                 self.get_symbol();
@@ -695,12 +725,12 @@ impl Parser {
                 let mut i = self.position(&self.last_id);
 
                 if i == TXMAX {
-                    self.error(11);
+                    self.error(ParseError::UndeclaredIdentifier);
                 } else {
                     //entry should exist so unwrap should be safe
                     let entry = self.ident_table[i].clone().unwrap();
                     if entry.kind != Obj::Variable {
-                        self.error(12);
+                        self.error(ParseError::NoConstAssign);
                         i = 0;
                     }
                 }
@@ -710,7 +740,7 @@ impl Parser {
                 if self.current_symbol == Symbol::Becomes {
                     self.get_symbol();
                 } else {
-                    self.error(13);
+                    self.error(ParseError::Assign);
                 }
 
                 self.expression(fsys);
@@ -725,11 +755,11 @@ impl Parser {
             Symbol::CallSym => {
                 self.get_symbol();
                 if self.current_symbol != Symbol::Ident {
-                    self.error(14);
+                    self.error(ParseError::CallAfter);
                 } else {
                     let i = self.position(&self.last_id);
                     if i == TXMAX {
-                        self.error(11);
+                        self.error(ParseError::UndeclaredIdentifier);
                     } else {
                         // entry should exist and be safe to unwrap
                         let entry = self.ident_table[i].clone().unwrap();
@@ -737,7 +767,7 @@ impl Parser {
                         if entry.kind == Obj::Procedure {
                             self.generate_instruction(Fct::Cal, level - entry.level, entry.adr);
                         } else {
-                            self.error(15);
+                            self.error(ParseError::CallConst);
                         }
                         self.get_symbol();
                     }
@@ -754,7 +784,7 @@ impl Parser {
                 if self.current_symbol == Symbol::ThenSym {
                     self.get_symbol();
                 } else {
-                    self.error(16);
+                    self.error(ParseError::ExpectedThen);
                 }
 
                 let init_code_index = self.code_index;
@@ -780,7 +810,7 @@ impl Parser {
                     if self.current_symbol == Symbol::Semicolon {
                         self.get_symbol();
                     } else {
-                        self.error(10);
+                        self.error(ParseError::StatementSeperator);
                     }
 
                     let mut new_symset2 = fsys.clone();
@@ -799,7 +829,7 @@ impl Parser {
                         }
                     }
                 } else {
-                    self.error(17);
+                    self.error(ParseError::ExpectedEnd);
                 }
             },
             Symbol::WhileSym => {
@@ -816,7 +846,7 @@ impl Parser {
                 if self.current_symbol == Symbol::DoSym {
                     self.get_symbol();
                 } else {
-                    self.error(18);
+                    self.error(ParseError::ExpectedDo);
                 }
 
                 self.statement(fsys);
@@ -830,7 +860,7 @@ impl Parser {
             _ => {},
         }
 
-        self.test(&test_symset, &SymSet::new(), 19);
+        self.test(&test_symset, &SymSet::new(), ParseError::StatementAfter);
     }
 
     /// Parser
@@ -847,7 +877,7 @@ impl Parser {
         self.generate_instruction(Fct::Jmp, 0, 0);
 
         if self.current_level > LEVMAX {
-            self.error(32);
+            self.error(ParseError::LexicalOverflow);
         }
 
         loop {
@@ -864,7 +894,7 @@ impl Parser {
                     if self.current_symbol == Symbol::Semicolon {
                         self.get_symbol();
                     } else {
-                        self.error(5);
+                        self.error(ParseError::CommaMiss);
                     }
 
                     if self.current_symbol != Symbol::Ident {
@@ -887,7 +917,7 @@ impl Parser {
                     if self.current_symbol == Symbol::Semicolon {
                         self.get_symbol();
                     } else {
-                        self.error(5);
+                        self.error(ParseError::CommaMiss);
                     }
 
                     if self.current_symbol != Symbol::Ident {
@@ -903,13 +933,13 @@ impl Parser {
                     self.enter(Obj::Procedure);
                     self.get_symbol();
                 } else {
-                    self.error(4);
+                    self.error(ParseError::IdentifierAfter);
                 }
 
                 if self.current_symbol == Symbol::Semicolon {
                     self.get_symbol();
                 } else {
-                    self.error(5);
+                    self.error(ParseError::CommaMiss);
                 }
 
                 let mut new_set1 = fsys.clone();
@@ -922,16 +952,16 @@ impl Parser {
                     let mut new_set2 = self.statbegsys.clone();
                     new_set2.insert(Symbol::Ident);
                     new_set2.insert(Symbol::ProcSym);
-                    self.test(&new_set2, &fsys, 6);
+                    self.test(&new_set2, &fsys, ParseError::ProcedureAfter);
                 } else {
-                    self.error(5);
+                    self.error(ParseError::CommaMiss);
                 }
             }
 
             let declbegsys1 = self.declbegsys.clone();
             let mut statbegsys1 = self.statbegsys.clone();
             statbegsys1.insert(Symbol::Ident);
-            self.test(&statbegsys1, &declbegsys1, 7);
+            self.test(&statbegsys1, &declbegsys1, ParseError::ExpectedStatement);
 
             if !self.declbegsys.contains(&self.current_symbol) {
                 break;
@@ -961,7 +991,7 @@ impl Parser {
 
         self.generate_instruction(Fct::Ret, 0, 0);
 
-        self.test(&fsys, &SymSet::new(), 8);
+        self.test(&fsys, &SymSet::new(), ParseError::StatementSymbol);
 
         if self.error_count == 0{
             self.list_code(code_index_init);
