@@ -15,6 +15,7 @@ const MAX_IDENTIFIER_LEN: usize = 10;     // length of identifiers
 const AMAX: usize = 2047; // maximum address
 const LEVMAX: usize = 3;  // maximum depth of block nesting
 const CXMAX: usize = 200; // size of code array
+const STACKSIZE: usize = 500; // interpreter stack size
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 enum Symbol {
@@ -82,15 +83,15 @@ enum Fct {
 impl std::fmt::Debug for Fct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let fct = match *self {
-            Fct::Lit => String::from("Lit"),
-            Fct::Opr => String::from("Opr"),
-            Fct::Lod => String::from("Lod"),
-            Fct::Sto => String::from("Sto"),
-            Fct::Cal => String::from("Cal"),
-            Fct::Ret => String::from("Ret"),
-            Fct::Int => String::from("Int"),
-            Fct::Jmp => String::from("Jmp"),
-            Fct::Jpc => String::from("Jpc"),
+            Fct::Lit => String::from("lit"),
+            Fct::Opr => String::from("opr"),
+            Fct::Lod => String::from("lod"),
+            Fct::Sto => String::from("sto"),
+            Fct::Cal => String::from("cal"),
+            Fct::Ret => String::from("ret"),
+            Fct::Int => String::from("int"),
+            Fct::Jmp => String::from("jmp"),
+            Fct::Jpc => String::from("jpc"),
         };
         write!(f, "{}", fct)
     }
@@ -103,7 +104,7 @@ struct Instruction {
 }
 impl std::fmt::Debug for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " {:?}  {}   {}  ", self.f, self.l, self.a)
+        write!(f, " {:?}{:4}{:5}", self.f, self.l, self.a)
     }
 }
 
@@ -126,10 +127,12 @@ struct Parser {
     last_num: usize,
     input: String,
     code_index: usize,
-    data_index: usize,
+    data_indices: Vec<usize>,
     table_index: usize,
     error_count: usize,
+    err_msgs: Vec<String>,
     char_count: usize,
+    line_start: bool,
     declbegsys: SymSet,
     statbegsys: SymSet,
     facbegsys: SymSet,
@@ -146,10 +149,12 @@ fn initialize_parser(input: String) -> Parser {
         last_id: String::new(),
         last_num: 0,
         code_index: 0,
-        data_index: 0,
+        data_indices: Vec::new(),
         table_index: 0,
         error_count: 0,
+        err_msgs: Vec::new(),
         char_count: 0,
+        line_start: true,
         declbegsys: SymSet::new(),
         statbegsys: SymSet::new(),
         facbegsys: SymSet::new(),
@@ -194,6 +199,7 @@ fn initialize_symset() -> SymSet {
 }
 
 fn main() {
+    //TODO read from stdin instead
     let path = Path::new("test.pl0");
     let mut input_file = match File::open(&path) {
         Err(y) => panic!("error opening input file: {}", y.description()),
@@ -217,9 +223,9 @@ fn main() {
         parser.error(9);
     }
     if parser.error_count == 0 {
-        interpret();
+        interpret(parser.code_words);
     } else {
-        print!("{} errors found", parser.error_count);
+        print!("\n{} errors found", parser.error_count);
     }
     println!("");
 }
@@ -227,57 +233,66 @@ fn main() {
 impl Parser {
     /// Error Handler
     fn error(&mut self, n: usize) {
-        let mut spaces = String::new();
+        let mut err_msg = String::from("*****");
 
         for _ in 0..self.char_count {
-            spaces.push(' ');
+            err_msg.push(' ');
         }
 
-        print!("*****{}^ ", spaces);
+        err_msg.push_str("^ ");
 
         match n {
-            1 => println!("use = instead of :="),
-            2 => println!("= must be followed by a number"),
-            3 => println!("identifier must be followed by ="),
-            4 => println!("const, var, procedure must be followed by an identifier"),
-            5 => println!("semicolon or comma missing"),
-            6 => println!("incorrect symbol after procedure declaration"),
-            7 => println!("statement expected"),
-            8 => println!("incorrect symbol after statement part in block"),
-            9 => println!("period expected"),
-           10 => println!("semicolon between statements is missing"),
-           11 => println!("undeclared identifier"),
-           12 => println!("assignment to constant or procedure is not allowed"),
-           13 => println!("assignment operator := expected"),
-           14 => println!("call must be followed by an identifier"),
-           15 => println!("call of a constant or a variable is meaningless"),
-           16 => println!("then expected"),
-           17 => println!("semicolon or end expected"),
-           18 => println!("do expected"),
-           19 => println!("incorrect symbol following statement"),
-           20 => println!("relational operator expected"),
-           21 => println!("expression must not contain a procedure identifier"),
-           22 => println!("right paranthesis missing"),
-           23 => println!("the preceding factor cannot be followed by this symbol"),
-           24 => println!("an expression cannot begin with this symbol"),
-           30 => println!("this number is too large"),
-           31 => println!("this constant is too large"),
-           32 => println!("too many lexical levels"),
+            1 => err_msg.push_str("use = instead of :="),
+            2 => err_msg.push_str("= must be followed by a number"),
+            3 => err_msg.push_str("identifier must be followed by ="),
+            4 => err_msg.push_str("const, var, procedure must be followed by an identifier"),
+            5 => err_msg.push_str("semicolon or comma missing"),
+            6 => err_msg.push_str("incorrect symbol after procedure declaration"),
+            7 => err_msg.push_str("statement expected"),
+            8 => err_msg.push_str("incorrect symbol after statement part in block"),
+            9 => err_msg.push_str("period expected"),
+           10 => err_msg.push_str("semicolon between statements is missing"),
+           11 => err_msg.push_str("undeclared identifier"),
+           12 => err_msg.push_str("assignment to constant or procedure is not allowed"),
+           13 => err_msg.push_str("assignment operator := expected"),
+           14 => err_msg.push_str("call must be followed by an identifier"),
+           15 => err_msg.push_str("call of a constant or a variable is meaningless"),
+           16 => err_msg.push_str("then expected"),
+           17 => err_msg.push_str("semicolon or end expected"),
+           18 => err_msg.push_str("do expected"),
+           19 => err_msg.push_str("incorrect symbol following statement"),
+           20 => err_msg.push_str("relational operator expected"),
+           21 => err_msg.push_str("expression must not contain a procedure identifier"),
+           22 => err_msg.push_str("right paranthesis missing"),
+           23 => err_msg.push_str("the preceding factor cannot be followed by this symbol"),
+           24 => err_msg.push_str("an expression cannot begin with this symbol"),
+           30 => err_msg.push_str("this number is too large"),
+           31 => err_msg.push_str("this constant is too large"),
+           32 => err_msg.push_str("too many lexical levels"),
            _ => {},
         }
+
+        self.err_msgs.push(err_msg);
         self.error_count += 1;
     }
 
     fn get_char(&mut self) {
         self.current_char = self.input.remove(0);
 
-        if self.current_char == '\n' {
-            println!("");
+        if self.line_start {
+            for msg in self.err_msgs.drain(..) {
+                println!("{}", msg);
+            }
+
+            print!("{:5} ", self.code_index);
             self.char_count = 0;
         } else {
-            print!("{}", self.current_char);
             self.char_count += 1;
         }
+
+        print!("{}", self.current_char);
+
+        self.line_start = self.current_char == '\n';
     }
 
     /// Tokenizer / Scanner
@@ -424,10 +439,10 @@ impl Parser {
 
     /// List code generated for this block
     /// Debug generated byte code
-    fn listcode(&self, code_start: usize) {
-        for i in code_start..self.code_index - 1 {
+    fn list_code(&self, code_start: usize) {
+        for i in code_start..self.code_index {
             match self.code_words[i] {
-                Some(ref instr) => println!("{:?}", instr),
+                Some(ref instr) => println!("{}{:?}", i, instr),
                 None => {},
             };
         }
@@ -452,15 +467,16 @@ impl Parser {
                 })
             },
             Obj::Variable => {
+                let data_indices = self.data_indices.pop().unwrap();
                 let e = Some(Entry {
                     name: self.last_id.clone(),
                     kind: Obj::Variable,
                     val: 0,
                     level: self.current_level,
-                    adr: self.data_index,
+                    adr: data_indices,
                 });
 
-                self.data_index += 1;
+                self.data_indices.push(data_indices + 1);
                 e
             },
             Obj::Prozedure => Some(Entry {
@@ -540,8 +556,8 @@ impl Parser {
                         Obj::Variable => { self.gen(Fct::Lod, level - entry.level, entry.adr); },
                         Obj::Prozedure => { self.error(21); },
                     }
-                    self.get_symbol();
                 }
+                self.get_symbol();
             } else {
                 if self.current_symbol == Symbol::Number {
                     if self.last_num > AMAX {
@@ -637,7 +653,7 @@ impl Parser {
                 self.gen(Fct::Opr, 0, 2);
             } else {
                 // minus
-                self.gen(Fct::Opr, 0, 2);
+                self.gen(Fct::Opr, 0, 3);
             }
         }
     }
@@ -760,6 +776,7 @@ impl Parser {
                     }
                 } else {
                     if self.current_symbol == Symbol::BeginSym {
+                        let entry_point = self.code_index - 1;
                         self.get_symbol();
 
                         let mut new_symset1 = fsys.clone();
@@ -782,6 +799,13 @@ impl Parser {
 
                         if self.current_symbol == Symbol::EndSym {
                             self.get_symbol();
+                            if self.current_symbol == Symbol::Period {
+                                let entry = &mut self.code_words[0];
+                                match *entry {
+                                    Some(ref mut e) => e.a = entry_point,
+                                    None => {},
+                                }
+                            }
                         } else {
                             self.error(17);
                         }
@@ -821,7 +845,7 @@ impl Parser {
     /// Parser
     fn block(&mut self, fsys: SymSet) {
         self.current_level += 1;
-        self.data_index = 3; // data allocation index
+        self.data_indices.push(3); // data allocation index
         let init_table_index = self.table_index; // initial table index
 
         match self.ident_table[self.table_index] {
@@ -936,7 +960,7 @@ impl Parser {
 
         let cx0 = self.code_index;
 
-        let dx = self.data_index;
+        let dx = self.data_indices.pop().unwrap();
         self.gen(Fct::Int, 0, dx);
 
         let mut new_set3 = fsys.clone();
@@ -949,7 +973,7 @@ impl Parser {
         self.test(&fsys, &SymSet::new(), 8);
 
         if self.error_count == 0{
-            self.listcode(cx0);
+            self.list_code(cx0);
         }
 
         self.current_level -= 1;
@@ -957,11 +981,127 @@ impl Parser {
 }
 
 /// Byte Code Interpreter
-fn interpret() {
+fn interpret(code_words: Vec<Option<Instruction>>) {
+    println!("Start PL/0");
 
+    let mut t = 0;
+    let mut b = 1;
+    let mut p  = 0;
+    let mut s: [i64; STACKSIZE] = [0; STACKSIZE];
+
+    loop {
+        let entry = &code_words[p];
+        p += 1;
+
+        match *entry {
+            Some(ref e) => {
+                match e.f {
+                    Fct::Lit => {
+                        t += 1;
+                        s[t] = e.a as i64;
+                    },
+                    Fct::Opr => {
+                        // operators
+                        match e.a {
+                            1 => s[t] = -s[t], // negate
+                            2 => {
+                                t -= 1;
+                                s[t] = s[t] + s[t + 1];
+                            }, // add
+                            3 => {
+                                t -= 1;
+                                s[t] = s[t] - s[t + 1];
+                            }, // subtract
+                            4 => {
+                                t -= 1;
+                                s[t] = s[t] * s[t + 1];
+                            }, // multiply
+                            5 => {
+                                t -= 1;
+                                s[t] = s[t] / s[t + 1];
+                            }, // divide
+                            6 => {
+                                s[t] = (s[t] % 2 != 0) as i64;
+                            }, // odd
+                            8 => {
+                                t -= 1;
+                                s[t] = (s[t] == s[t + 1]) as i64;
+                            }, // =
+                            9 => {
+                                t -= 1;
+                                s[t] = (s[t] != s[t + 1]) as i64;
+                            }, // #
+                            10 => {
+                                t -= 1;
+                                s[t] = (s[t] < s[t + 1]) as i64;
+                            }, // <
+                            11 => {
+                                t -= 1;
+                                s[t] = (s[t] >= s[t + 1]) as i64;
+                            }, // >=
+                            12 => {
+                                t -= 1;
+                                s[t] = (s[t] > s[t + 1]) as i64;
+                            }, // >
+                            13 => {
+                                t -= 1;
+                                s[t] = (s[t] <= s[t + 1]) as i64;
+                            }, // <=
+                            _ => {},
+                        }
+                    },
+                    Fct::Lod => {
+                        t += 1;
+                        s[t] = s[find_base(e.l, b, &s) + e.a]
+                    },
+                    Fct::Sto => {
+                        let base = find_base(e.l, b, &s);
+                        s[base + e.a] = s[t];
+                        println!("{}", s[t]);
+                        t -= 1;
+                    },
+                    Fct::Cal => {
+                        s[t + 1] = find_base(e.l, b, &s) as i64;
+                        s[t + 2] = b as i64;
+                        s[t + 3] = p as i64;
+                        b = t + 1;
+                        p = e.a;
+                    },
+                    Fct::Ret => {
+                        t = b - 1;
+                        p = s[t + 3] as usize;
+                        b = s[t + 2] as usize;
+                    },
+                    Fct::Int => t = t + e.a,
+                    Fct::Jmp => p = e.a,
+                    Fct::Jpc => {
+                        if s[t] == 0 {
+                            p = e.a;
+                        }
+                        t -= 1;
+                    },
+                }
+            },
+            None => {},
+        }
+
+        if p == 0 {
+            break;
+        }
+    }
+    print!("End PL/0");
+}
+
+fn find_base(mut l: usize, b: usize, s: &[i64; STACKSIZE]) -> usize {
+    let mut b1 = b;
+
+    while l > 0 {
+        b1 = s[b1] as usize;
+        l -= 1;
+    }
+
+    b1
 }
 
 //TODO
-//  -add line numbers / format output exactly
-//  -add Ret 0 0 to the end of funcions
-//  -write interpreter
+//  -fix up all the .clone()'s
