@@ -125,6 +125,7 @@ impl std::fmt::Debug for Fct {
     }
 }
 
+#[derive(Copy, Clone)]
 struct Instruction {
     function: Fct,
     level: usize, // [0, LEVMAX)
@@ -146,8 +147,8 @@ struct Entry {
 }
 
 struct Parser {
-    code_words: Vec<Option<Instruction>>,
-    ident_table: Vec<Option<Entry>>,
+    code_words: [Option<Instruction>; CXMAX],
+    ident_table: [Option<Entry>; TXMAX],
     current_char: char,
     current_symbol: Symbol,
     current_level: usize,
@@ -168,8 +169,9 @@ struct Parser {
 
 fn initialize_parser(input: String) -> Parser {
     let mut parser = Parser {
-        code_words: Vec::with_capacity(CXMAX),
-        ident_table: Vec::with_capacity(TXMAX),
+        code_words: [None; CXMAX],
+        // TODO: rewrite below as a macro
+        ident_table: [None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None],
         input: input,
         current_char: ' ',
         current_symbol: Symbol::Nul,
@@ -187,14 +189,6 @@ fn initialize_parser(input: String) -> Parser {
         statbegsys: SymSet::new(),
         facbegsys: SymSet::new(),
     };
-
-    for _ in 0..CXMAX {
-        parser.code_words.push(None);
-    }
-
-    for _ in 0..TXMAX {
-        parser.ident_table.push(None);
-    }
 
     parser.declbegsys.insert(Symbol::ConstSym);
     parser.declbegsys.insert(Symbol::VarSym);
@@ -335,6 +329,11 @@ impl Parser {
         }
 
         let mut identifier = String::new();
+
+        match self.current_char {
+            _ => {},
+        }
+
         if is_identifier_start(self.current_char) {
             // identifier or reserved word
             loop {
@@ -1123,7 +1122,3 @@ fn find_base(mut level: usize, base_init: usize, stack: &[i64; STACKSIZE]) -> us
 
     base
 }
-
-// TODO
-//  -used fixed sized arrays for the fixed stuff
-//  -add error enum instead of #'s
