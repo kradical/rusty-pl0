@@ -81,28 +81,28 @@ enum Fct {
 impl std::fmt::Debug for Fct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let fct = match *self {
-            Fct::Lit => String::from("lit"),
-            Fct::Opr => String::from("opr"),
-            Fct::Lod => String::from("lod"),
-            Fct::Sto => String::from("sto"),
-            Fct::Cal => String::from("cal"),
-            Fct::Ret => String::from("ret"),
-            Fct::Int => String::from("int"),
-            Fct::Jmp => String::from("jmp"),
-            Fct::Jpc => String::from("jpc"),
+            Fct::Lit => "lit",
+            Fct::Opr => "opr",
+            Fct::Lod => "lod",
+            Fct::Sto => "sto",
+            Fct::Cal => "cal",
+            Fct::Ret => "ret",
+            Fct::Int => "int",
+            Fct::Jmp => "jmp",
+            Fct::Jpc => "jpc",
         };
         write!(f, "{}", fct)
     }
 }
 
 struct Instruction {
-    f: Fct,
-    l: usize, // [0, LEVMAX)
-    a: usize, // [0, AMAZ)
+    function: Fct,
+    level: usize, // [0, LEVMAX)
+    address: usize, // [0, AMAZ)
 }
 impl std::fmt::Debug for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " {:?}{:4}{:5}", self.f, self.l, self.a)
+        write!(f, " {:?}{:4}{:5}", self.function, self.level, self.address)
     }
 }
 
@@ -213,7 +213,7 @@ fn main() {
         parser.error(9);
     }
     if parser.error_count == 0 {
-        interpret(parser.code_words);
+        interpret(&parser.code_words);
     } else {
         print!("\n{} errors found", parser.error_count);
     }
@@ -403,15 +403,15 @@ impl Parser {
     }
 
     /// Code Generator
-    fn gen(&mut self, x: Fct, y: usize, z: usize) {
+    fn generate_instruction(&mut self, f: Fct, l: usize, a: usize) {
         if self.code_index > CXMAX {
             panic!("Program too long");
         }
 
         self.code_words[self.code_index] = Some(Instruction {
-            f: x,
-            l: y,
-            a: z,
+            function: f,
+            level: l,
+            address: a,
         });
 
         self.code_index += 1;
@@ -542,8 +542,8 @@ impl Parser {
                     let level = self.current_level;
 
                     match entry.kind {
-                        Obj::Constant => { self.gen(Fct::Lit, 0, entry.val); },
-                        Obj::Variable => { self.gen(Fct::Lod, level - entry.level, entry.adr); },
+                        Obj::Constant => { self.generate_instruction(Fct::Lit, 0, entry.val); },
+                        Obj::Variable => { self.generate_instruction(Fct::Lod, level - entry.level, entry.adr); },
                         Obj::Procedure => { self.error(21); },
                     }
                 }
@@ -555,7 +555,7 @@ impl Parser {
                         self.last_num = 0;
                     }
                     let last_num = self.last_num;
-                    self.gen(Fct::Lit, 0, last_num);
+                    self.generate_instruction(Fct::Lit, 0, last_num);
                     self.get_symbol();
                 } else {
                     if self.current_symbol == Symbol::LParen {
@@ -596,10 +596,10 @@ impl Parser {
             self.factor(new_fsys2);
 
             if mulop == Symbol::Times {
-                self.gen(Fct::Opr, 0, 4);
+                self.generate_instruction(Fct::Opr, 0, 4);
             } else {
                 // divide
-                self.gen(Fct::Opr, 0, 5);
+                self.generate_instruction(Fct::Opr, 0, 5);
             }
         }
     }
@@ -620,7 +620,7 @@ impl Parser {
             self.term(new_set1);
 
             if addop == Symbol::Minus {
-                self.gen(Fct::Opr, 0, 1);
+                self.generate_instruction(Fct::Opr, 0, 1);
             }
         } else {
             let mut new_set2 = fsys.clone();
@@ -640,10 +640,10 @@ impl Parser {
             self.term(new_set3);
 
             if addop == Symbol::Plus {
-                self.gen(Fct::Opr, 0, 2);
+                self.generate_instruction(Fct::Opr, 0, 2);
             } else {
                 // minus
-                self.gen(Fct::Opr, 0, 3);
+                self.generate_instruction(Fct::Opr, 0, 3);
             }
         }
     }
@@ -653,10 +653,11 @@ impl Parser {
             s == Symbol::Eql || s == Symbol::Neq || s == Symbol::Lss ||
             s == Symbol::Leq || s == Symbol::Gtr || s == Symbol::Geq
         }
+
         if self.current_symbol == Symbol::OddSym {
             self.get_symbol();
             self.expression(fsys);
-            self.gen(Fct::Opr, 0, 6) // odd
+            self.generate_instruction(Fct::Opr, 0, 6) // odd
         } else {
             let mut new_set1 = fsys.clone();
             new_set1.insert(Symbol::Eql);
@@ -674,12 +675,12 @@ impl Parser {
                 self.get_symbol();
                 self.expression(fsys);
                 match relop {
-                    Symbol::Eql => self.gen(Fct::Opr, 0, 8), // =
-                    Symbol::Neq => self.gen(Fct::Opr, 0, 9), // #
-                    Symbol::Lss => self.gen(Fct::Opr, 0, 10), // <
-                    Symbol::Geq => self.gen(Fct::Opr, 0, 11), // >=
-                    Symbol::Gtr => self.gen(Fct::Opr, 0, 12), // >
-                    Symbol::Leq => self.gen(Fct::Opr, 0, 13), // <=
+                    Symbol::Eql => self.generate_instruction(Fct::Opr, 0, 8), // =
+                    Symbol::Neq => self.generate_instruction(Fct::Opr, 0, 9), // #
+                    Symbol::Lss => self.generate_instruction(Fct::Opr, 0, 10), // <
+                    Symbol::Geq => self.generate_instruction(Fct::Opr, 0, 11), // >=
+                    Symbol::Gtr => self.generate_instruction(Fct::Opr, 0, 12), // >
+                    Symbol::Leq => self.generate_instruction(Fct::Opr, 0, 13), // <=
                     _ => {},
                 }
             }
@@ -689,38 +690,39 @@ impl Parser {
     fn statement(&mut self, fsys: SymSet) {
         let test_symset = fsys.clone();
 
-        if self.current_symbol == Symbol::Ident {
-            let mut i = self.position(&self.last_id);
+        match self.current_symbol {
+            Symbol::Ident => {
+                let mut i = self.position(&self.last_id);
 
-            if i == TXMAX {
-                self.error(11);
-            } else {
-                //entry should exist so unwrap should be safe
-                let entry = self.ident_table[i].clone().unwrap();
-                if entry.kind != Obj::Variable {
-                    self.error(12);
-                    i = 0;
+                if i == TXMAX {
+                    self.error(11);
+                } else {
+                    //entry should exist so unwrap should be safe
+                    let entry = self.ident_table[i].clone().unwrap();
+                    if entry.kind != Obj::Variable {
+                        self.error(12);
+                        i = 0;
+                    }
                 }
-            }
 
-            self.get_symbol();
-
-            if self.current_symbol == Symbol::Becomes {
                 self.get_symbol();
-            } else {
-                self.error(13);
-            }
 
-            self.expression(fsys);
+                if self.current_symbol == Symbol::Becomes {
+                    self.get_symbol();
+                } else {
+                    self.error(13);
+                }
 
-            if i != 0 {
-                // as above should be safe to unwrap
-                let entry = self.ident_table[i].clone().unwrap();
-                let level = self.current_level;
-                self.gen(Fct::Sto, level - entry.level, entry.adr);
-            }
-        } else {
-            if self.current_symbol == Symbol::CallSym {
+                self.expression(fsys);
+
+                if i != 0 {
+                    // as above should be safe to unwrap
+                    let entry = self.ident_table[i].clone().unwrap();
+                    let level = self.current_level;
+                    self.generate_instruction(Fct::Sto, level - entry.level, entry.adr);
+                }
+            },
+            Symbol::CallSym => {
                 self.get_symbol();
                 if self.current_symbol != Symbol::Ident {
                     self.error(14);
@@ -733,102 +735,101 @@ impl Parser {
                         let entry = self.ident_table[i].clone().unwrap();
                         let level = self.current_level;
                         if entry.kind == Obj::Procedure {
-                            self.gen(Fct::Cal, level - entry.level, entry.adr);
+                            self.generate_instruction(Fct::Cal, level - entry.level, entry.adr);
                         } else {
                             self.error(15);
                         }
                         self.get_symbol();
                     }
                 }
-            } else {
-                if self.current_symbol == Symbol::IfSym {
+            },
+            Symbol::IfSym => {
+                self.get_symbol();
+
+                let mut new_symset = fsys.clone();
+                new_symset.insert(Symbol::ThenSym);
+                new_symset.insert(Symbol::DoSym);
+                self.condition(new_symset);
+
+                if self.current_symbol == Symbol::ThenSym {
                     self.get_symbol();
+                } else {
+                    self.error(16);
+                }
 
-                    let mut new_symset = fsys.clone();
-                    new_symset.insert(Symbol::ThenSym);
-                    new_symset.insert(Symbol::DoSym);
-                    self.condition(new_symset);
+                let init_code_index = self.code_index;
+                self.generate_instruction(Fct::Jpc, 0, 0);
+                self.statement(fsys);
 
-                    if self.current_symbol == Symbol::ThenSym {
+                let entry = &mut self.code_words[init_code_index];
+                match *entry {
+                    Some(ref mut e) => e.address = self.code_index,
+                    None => {},
+                }
+            },
+            Symbol::BeginSym => {
+                let program_main = self.code_index - 1;
+                self.get_symbol();
+
+                let mut new_symset1 = fsys.clone();
+                new_symset1.insert(Symbol::Semicolon);
+                new_symset1.insert(Symbol::EndSym);
+                self.statement(new_symset1);
+
+                while self.statbegsys.contains(&self.current_symbol) || self.current_symbol == Symbol::Semicolon {
+                    if self.current_symbol == Symbol::Semicolon {
                         self.get_symbol();
                     } else {
-                        self.error(16);
+                        self.error(10);
                     }
 
-                    let init_code_index = self.code_index;
-                    self.gen(Fct::Jpc, 0, 0);
-                    self.statement(fsys);
+                    let mut new_symset2 = fsys.clone();
+                    new_symset2.insert(Symbol::Semicolon);
+                    new_symset2.insert(Symbol::EndSym);
+                    self.statement(new_symset2);
+                }
 
-                    let entry = &mut self.code_words[init_code_index];
-                    match *entry {
-                        Some(ref mut e) => e.a = self.code_index,
-                        None => {},
+                if self.current_symbol == Symbol::EndSym {
+                    self.get_symbol();
+                    if self.current_symbol == Symbol::Period {
+                        let entry = &mut self.code_words[0];
+                        match *entry {
+                            Some(ref mut e) => e.address = program_main,
+                            None => {},
+                        }
                     }
                 } else {
-                    if self.current_symbol == Symbol::BeginSym {
-                        let entry_point = self.code_index - 1;
-                        self.get_symbol();
-
-                        let mut new_symset1 = fsys.clone();
-                        new_symset1.insert(Symbol::Semicolon);
-                        new_symset1.insert(Symbol::EndSym);
-                        self.statement(new_symset1);
-
-                        while self.statbegsys.contains(&self.current_symbol) || self.current_symbol == Symbol::Semicolon {
-                            if self.current_symbol == Symbol::Semicolon {
-                                self.get_symbol();
-                            } else {
-                                self.error(10);
-                            }
-
-                            let mut new_symset2 = fsys.clone();
-                            new_symset2.insert(Symbol::Semicolon);
-                            new_symset2.insert(Symbol::EndSym);
-                            self.statement(new_symset2);
-                        }
-
-                        if self.current_symbol == Symbol::EndSym {
-                            self.get_symbol();
-                            if self.current_symbol == Symbol::Period {
-                                let entry = &mut self.code_words[0];
-                                match *entry {
-                                    Some(ref mut e) => e.a = entry_point,
-                                    None => {},
-                                }
-                            }
-                        } else {
-                            self.error(17);
-                        }
-                    } else {
-                        if self.current_symbol == Symbol::WhileSym {
-                            let code_index1 = self.code_index;
-
-                            self.get_symbol();
-                            let mut new_symset3 = fsys.clone();
-                            new_symset3.insert(Symbol::DoSym);
-                            self.condition(new_symset3);
-
-                            let code_index2 = self.code_index;
-                            self.gen(Fct::Jpc, 0, 0);
-
-                            if self.current_symbol == Symbol::DoSym {
-                                self.get_symbol();
-                            } else {
-                                self.error(18);
-                            }
-
-                            self.statement(fsys);
-                            self.gen(Fct::Jmp, 0, code_index1);
-                            let entry = &mut self.code_words[code_index2];
-                            match *entry {
-                                Some(ref mut e) => e.a = self.code_index,
-                                None => {},
-                            }
-                        }
-                    }
+                    self.error(17);
                 }
-            }
+            },
+            Symbol::WhileSym => {
+                let code_index1 = self.code_index;
+
+                self.get_symbol();
+                let mut new_symset3 = fsys.clone();
+                new_symset3.insert(Symbol::DoSym);
+                self.condition(new_symset3);
+
+                let code_index2 = self.code_index;
+                self.generate_instruction(Fct::Jpc, 0, 0);
+
+                if self.current_symbol == Symbol::DoSym {
+                    self.get_symbol();
+                } else {
+                    self.error(18);
+                }
+
+                self.statement(fsys);
+                self.generate_instruction(Fct::Jmp, 0, code_index1);
+                let entry = &mut self.code_words[code_index2];
+                match *entry {
+                    Some(ref mut e) => e.address = self.code_index,
+                    None => {},
+                }
+            },
+            _ => {},
         }
+
         self.test(&test_symset, &SymSet::new(), 19);
     }
 
@@ -843,7 +844,7 @@ impl Parser {
             None => {},
         }
 
-        self.gen(Fct::Jmp, 0, 0);
+        self.generate_instruction(Fct::Jmp, 0, 0);
 
         if self.current_level > LEVMAX {
             self.error(32);
@@ -940,7 +941,7 @@ impl Parser {
         match self.ident_table[init_table_index] {
             Some(ref mut e) => {
                 match self.code_words[e.adr] {
-                    Some(ref mut i) => i.a = self.code_index,
+                    Some(ref mut i) => i.address = self.code_index,
                     None => {},
                 }
                 e.adr = self.code_index;
@@ -948,22 +949,22 @@ impl Parser {
             None => {},
         }
 
-        let cx0 = self.code_index;
+        let code_index_init = self.code_index;
 
-        let dx = self.data_indices.pop().unwrap();
-        self.gen(Fct::Int, 0, dx);
+        let data_index = self.data_indices.pop().unwrap();
+        self.generate_instruction(Fct::Int, 0, data_index);
 
         let mut new_set3 = fsys.clone();
         new_set3.insert(Symbol::Semicolon);
         new_set3.insert(Symbol::EndSym);
         self.statement(new_set3);
 
-        self.gen(Fct::Ret, 0, 0);
+        self.generate_instruction(Fct::Ret, 0, 0);
 
         self.test(&fsys, &SymSet::new(), 8);
 
         if self.error_count == 0{
-            self.list_code(cx0);
+            self.list_code(code_index_init);
         }
 
         self.current_level -= 1;
@@ -971,128 +972,128 @@ impl Parser {
 }
 
 /// Byte Code Interpreter
-fn interpret(code_words: Vec<Option<Instruction>>) {
+fn interpret(code_words: &[Option<Instruction>]) {
     println!("Start PL/0");
 
-    let mut t = 0;
-    let mut b = 1;
-    let mut p  = 0;
-    let mut s: [i64; STACKSIZE] = [0; STACKSIZE];
+    let mut stack_index = 0;
+    let mut base = 1;
+    let mut address = 0;
+    let mut stack: [i64; STACKSIZE] = [0; STACKSIZE];
 
     loop {
-        let entry = &code_words[p];
-        p += 1;
+        let instruction_pointer = &code_words[address];
+        address += 1;
 
-        match *entry {
+        match *instruction_pointer {
             Some(ref e) => {
-                match e.f {
+                match e.function {
                     Fct::Lit => {
-                        t += 1;
-                        s[t] = e.a as i64;
+                        stack_index += 1;
+                        stack[stack_index] = e.address as i64;
                     },
                     Fct::Opr => {
                         // operators
-                        match e.a {
-                            1 => s[t] = -s[t], // negate
+                        match e.address {
+                            1 => stack[stack_index] = -stack[stack_index], // negate
                             2 => {
-                                t -= 1;
-                                s[t] = s[t] + s[t + 1];
+                                stack_index -= 1;
+                                stack[stack_index] = stack[stack_index] + stack[stack_index + 1];
                             }, // add
                             3 => {
-                                t -= 1;
-                                s[t] = s[t] - s[t + 1];
+                                stack_index -= 1;
+                                stack[stack_index] = stack[stack_index] - stack[stack_index + 1];
                             }, // subtract
                             4 => {
-                                t -= 1;
-                                s[t] = s[t] * s[t + 1];
+                                stack_index -= 1;
+                                stack[stack_index] = stack[stack_index] * stack[stack_index + 1];
                             }, // multiply
                             5 => {
-                                t -= 1;
-                                s[t] = s[t] / s[t + 1];
+                                stack_index -= 1;
+                                stack[stack_index] = stack[stack_index] / stack[stack_index + 1];
                             }, // divide
                             6 => {
-                                s[t] = (s[t] % 2 != 0) as i64;
+                                stack[stack_index] = (stack[stack_index] % 2 != 0) as i64;
                             }, // odd
                             8 => {
-                                t -= 1;
-                                s[t] = (s[t] == s[t + 1]) as i64;
+                                stack_index -= 1;
+                                stack[stack_index] = (stack[stack_index] == stack[stack_index + 1]) as i64;
                             }, // =
                             9 => {
-                                t -= 1;
-                                s[t] = (s[t] != s[t + 1]) as i64;
+                                stack_index -= 1;
+                                stack[stack_index] = (stack[stack_index] != stack[stack_index + 1]) as i64;
                             }, // #
                             10 => {
-                                t -= 1;
-                                s[t] = (s[t] < s[t + 1]) as i64;
+                                stack_index -= 1;
+                                stack[stack_index] = (stack[stack_index] < stack[stack_index + 1]) as i64;
                             }, // <
                             11 => {
-                                t -= 1;
-                                s[t] = (s[t] >= s[t + 1]) as i64;
+                                stack_index -= 1;
+                                stack[stack_index] = (stack[stack_index] >= stack[stack_index + 1]) as i64;
                             }, // >=
                             12 => {
-                                t -= 1;
-                                s[t] = (s[t] > s[t + 1]) as i64;
+                                stack_index -= 1;
+                                stack[stack_index] = (stack[stack_index] > stack[stack_index + 1]) as i64;
                             }, // >
                             13 => {
-                                t -= 1;
-                                s[t] = (s[t] <= s[t + 1]) as i64;
+                                stack_index -= 1;
+                                stack[stack_index] = (stack[stack_index] <= stack[stack_index + 1]) as i64;
                             }, // <=
                             _ => {},
                         }
                     },
                     Fct::Lod => {
-                        t += 1;
-                        s[t] = s[find_base(e.l, b, &s) + e.a]
+                        stack_index += 1;
+                        stack[stack_index] = stack[find_base(e.level, base, &stack) + e.address]
                     },
                     Fct::Sto => {
-                        let base = find_base(e.l, b, &s);
-                        s[base + e.a] = s[t];
-                        println!("{}", s[t]);
-                        t -= 1;
+                        let base = find_base(e.level, base, &stack);
+                        stack[base + e.address] = stack[stack_index];
+                        println!("{}", stack[stack_index]);
+                        stack_index -= 1;
                     },
                     Fct::Cal => {
-                        s[t + 1] = find_base(e.l, b, &s) as i64;
-                        s[t + 2] = b as i64;
-                        s[t + 3] = p as i64;
-                        b = t + 1;
-                        p = e.a;
+                        stack[stack_index + 1] = find_base(e.level, base, &stack) as i64;
+                        stack[stack_index + 2] = base as i64;
+                        stack[stack_index + 3] = address as i64;
+                        base = stack_index + 1;
+                        address = e.address;
                     },
                     Fct::Ret => {
-                        t = b - 1;
-                        p = s[t + 3] as usize;
-                        b = s[t + 2] as usize;
+                        stack_index = base - 1;
+                        address = stack[stack_index + 3] as usize;
+                        base = stack[stack_index + 2] as usize;
                     },
-                    Fct::Int => t = t + e.a,
-                    Fct::Jmp => p = e.a,
+                    Fct::Int => stack_index = stack_index + e.address,
+                    Fct::Jmp => address = e.address,
                     Fct::Jpc => {
-                        if s[t] == 0 {
-                            p = e.a;
+                        if stack[stack_index] == 0 {
+                            address = e.address;
                         }
-                        t -= 1;
+                        stack_index -= 1;
                     },
                 }
             },
             None => {},
         }
 
-        if p == 0 {
+        if address == 0 {
             break;
         }
     }
     print!("End PL/0");
 }
 
-fn find_base(mut l: usize, b: usize, s: &[i64; STACKSIZE]) -> usize {
-    let mut b1 = b;
+fn find_base(mut level: usize, base_init: usize, stack: &[i64; STACKSIZE]) -> usize {
+    let mut base = base_init;
 
-    while l > 0 {
-        b1 = s[b1] as usize;
-        l -= 1;
+    while level > 0 {
+        base = stack[base] as usize;
+        level -= 1;
     }
 
-    b1
+    base
 }
 
 // TODO
-//  -fix up all the cloning
 //  -used fixed sized arrays for the fixed stuff
+//  -add error enum instead of #'s
