@@ -55,7 +55,7 @@ enum Symbol {
 enum Obj {
     Constant,
     Variable,
-    Prozedure,
+    Procedure,
 }
 
 // Instructions
@@ -479,9 +479,9 @@ impl Parser {
                 self.data_indices.push(data_indices + 1);
                 e
             },
-            Obj::Prozedure => Some(Entry {
+            Obj::Procedure => Some(Entry {
                 name: self.last_id.clone(),
-                kind: Obj::Prozedure,
+                kind: Obj::Procedure,
                 val: 0,
                 level: self.current_level,
                 adr: 0,
@@ -554,7 +554,7 @@ impl Parser {
                     match entry.kind {
                         Obj::Constant => { self.gen(Fct::Lit, 0, entry.val); },
                         Obj::Variable => { self.gen(Fct::Lod, level - entry.level, entry.adr); },
-                        Obj::Prozedure => { self.error(21); },
+                        Obj::Procedure => { self.error(21); },
                     }
                 }
                 self.get_symbol();
@@ -742,7 +742,7 @@ impl Parser {
                         // entry should exist and be safe to unwrap
                         let entry = self.ident_table[i].clone().unwrap();
                         let level = self.current_level;
-                        if entry.kind == Obj::Prozedure {
+                        if entry.kind == Obj::Procedure {
                             self.gen(Fct::Cal, level - entry.level, entry.adr);
                         } else {
                             self.error(15);
@@ -909,7 +909,7 @@ impl Parser {
                 self.get_symbol();
 
                 if self.current_symbol == Symbol::Ident {
-                    self.enter(Obj::Prozedure);
+                    self.enter(Obj::Procedure);
                     self.get_symbol();
                 } else {
                     self.error(4);
