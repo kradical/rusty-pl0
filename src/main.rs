@@ -331,39 +331,36 @@ impl Parser {
         let mut identifier = String::new();
 
         match self.current_char {
-            _ => {},
-        }
+            'a'...'z' => {
+                // identifier or reserved word
+                loop {
+                    if identifier.len() < MAX_IDENTIFIER_LEN {
+                        identifier.push(self.current_char);
+                    }
+                    self.get_char();
 
-        if is_identifier_start(self.current_char) {
-            // identifier or reserved word
-            loop {
-                if identifier.len() < MAX_IDENTIFIER_LEN {
-                    identifier.push(self.current_char);
+                    if !is_identifier(self.current_char) {
+                        break;
+                    }
                 }
-                self.get_char();
 
-                if !is_identifier(self.current_char) {
-                    break;
-                }
-            }
-
-            self.current_symbol = match &identifier[..] {
-                "begin" => Symbol::BeginSym,
-                "call" => Symbol::CallSym,
-                "const" => Symbol::ConstSym,
-                "do" => Symbol::DoSym,
-                "end" => Symbol::EndSym,
-                "if" => Symbol::IfSym,
-                "odd" => Symbol::OddSym,
-                "procedure" => Symbol::ProcSym,
-                "then" => Symbol::ThenSym,
-                "var" => Symbol::VarSym,
-                "while" => Symbol::WhileSym,
-                _ => Symbol::Ident,
-            };
-            self.last_id = identifier;
-        } else {
-            if is_number(self.current_char) {
+                self.current_symbol = match &identifier[..] {
+                    "begin" => Symbol::BeginSym,
+                    "call" => Symbol::CallSym,
+                    "const" => Symbol::ConstSym,
+                    "do" => Symbol::DoSym,
+                    "end" => Symbol::EndSym,
+                    "if" => Symbol::IfSym,
+                    "odd" => Symbol::OddSym,
+                    "procedure" => Symbol::ProcSym,
+                    "then" => Symbol::ThenSym,
+                    "var" => Symbol::VarSym,
+                    "while" => Symbol::WhileSym,
+                    _ => Symbol::Ident,
+                };
+                self.last_id = identifier;
+            },
+            '0'...'9' => {
                 self.current_symbol = Symbol::Number;
 
                 let mut num_string = String::new();
@@ -381,53 +378,51 @@ impl Parser {
                 }
 
                 self.last_num = number;
-            } else {
-                if self.current_char == ':' {
+            },
+            ':' => {
+                self.get_char();
+                if self.current_char == '=' {
+                    self.current_symbol = Symbol::Becomes;
                     self.get_char();
-                    if self.current_char == '=' {
-                        self.current_symbol = Symbol::Becomes;
-                        self.get_char();
-                    } else {
-                        self.current_symbol = Symbol::Nul;
-                    }
                 } else {
-                    if self.current_char == '<' {
-                        self.get_char();
-                        if self.current_char == '=' {
-                            self.current_symbol = Symbol::Leq;
-                            self.get_char();
-                        } else {
-                            self.current_symbol = Symbol::Lss;
-                        }
-                    } else {
-                        if self.current_char == '>' {
-                            self.get_char();
-                            if self.current_char == '=' {
-                                self.current_symbol = Symbol::Geq;
-                                self.get_char();
-                            } else {
-                                self.current_symbol = Symbol::Gtr;
-                            }
-                        } else {
-                            self.current_symbol = match self.current_char {
-                                '+' => Symbol::Plus,
-                                '-' => Symbol::Minus,
-                                '*' => Symbol::Times,
-                                '/' => Symbol::Slash,
-                                '(' => Symbol::LParen,
-                                ')' => Symbol::RParen,
-                                '=' => Symbol::Eql,
-                                ',' => Symbol::Comma,
-                                '.' => Symbol::Period,
-                                '#' => Symbol::Neq,
-                                ';' => Symbol::Semicolon,
-                                _ => Symbol::Nul,
-                            };
-                            self.get_char();
-                        }
-                    }
+                    self.current_symbol = Symbol::Nul;
                 }
-            }
+            },
+            '<' => {
+                self.get_char();
+                if self.current_char == '=' {
+                    self.current_symbol = Symbol::Leq;
+                    self.get_char();
+                } else {
+                    self.current_symbol = Symbol::Lss;
+                }
+            },
+            '>' => {
+                self.get_char();
+                if self.current_char == '=' {
+                    self.current_symbol = Symbol::Geq;
+                    self.get_char();
+                } else {
+                    self.current_symbol = Symbol::Gtr;
+                }
+            },
+            _ => {
+                self.current_symbol = match self.current_char {
+                    '+' => Symbol::Plus,
+                    '-' => Symbol::Minus,
+                    '*' => Symbol::Times,
+                    '/' => Symbol::Slash,
+                    '(' => Symbol::LParen,
+                    ')' => Symbol::RParen,
+                    '=' => Symbol::Eql,
+                    ',' => Symbol::Comma,
+                    '.' => Symbol::Period,
+                    '#' => Symbol::Neq,
+                    ';' => Symbol::Semicolon,
+                    _ => Symbol::Nul,
+                };
+                self.get_char();
+            },
         }
     }
 
