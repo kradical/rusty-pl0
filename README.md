@@ -9,6 +9,12 @@ To run:
 - install rust compiler
 - install cargo
 - navigate to the root project directory
-- `cargo run`
+- `cargo run < test.pl0` for a syntactically valid pl/0 program
+- `cargo run < err.pl0` for a program with errors
+
+As seen above the program reads from stdin.
+
+`testKEY.out` and `errKEY.out` act as expected outputs to compare to when making changes.  
+
 
 Written as a challenge from the Programming Languages (CSC330 @ UVic) proffessor Dr. Mantis Cheng.
