@@ -1,5 +1,5 @@
 [package]
-name = "pl0"
+name = "rusty-pl0"
 version = "0.1.0"
 authors = ["kradical <konrad_here@hotmail.com>"]
 
