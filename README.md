@@ -9,8 +9,8 @@ To run:
 - install rust compiler
 - install cargo
 - navigate to the root project directory
-- `cargo run < test.pl0` for a syntactically valid pl/0 program
-- `cargo run < err.pl0` for a program with errors
+- `cargo run < test.pl0` to test a syntactically valid pl/0 program
+- `cargo run < err.pl0` to test a program with errors
 
 As seen above the program reads from stdin.
 
