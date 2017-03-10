@@ -1,5 +1,5 @@
 # rusty-pl0
-A compiler + interpreter for the pl0 programming language in rust.
+A compiler + interpreter for the pl0 programming language in Rust.
 
 pl0 is an educational subset of pascal.
 
