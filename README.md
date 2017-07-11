@@ -14,7 +14,4 @@ To run:
 
 As seen above the program reads from stdin.
 
-`testKEY.out` and `errKEY.out` act as expected outputs to compare to when making changes.  
-
-
-Written as a challenge from the Programming Languages (CSC330 @ UVic) proffessor Dr. Mantis Cheng.
+`testKEY.out` and `errKEY.out` act as expected outputs to compare to when making changes.
